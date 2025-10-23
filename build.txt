@@ -1,0 +1,13 @@
+IGNORE THESE but I might need these if I try to build with clang that comes with LLVM instead of VS installer clang.
+The reason I use VS installer clang is because I don't know why but ubsan wont work because it's missing ubsan runtime I think
+PATH=%PATH%;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin
+PATH=%PATH%;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja
+
+I'm using the prebuilt llvm and copying it to a folder named llvm, note it will not have ubsan (I think?) and static.
+cmake -B build_test -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL -DCMAKE_CXX_COMPILER=clang++.exe -DCMAKE_PREFIX_PATH=llvm -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+you will get a undefined reference to diaguids.lib, but I think they are fixing it?
+https://github.com/llvm/llvm-project/issues/86250
+there is no way to fix it other than manually adding folders or modifying the cmake script LLVMExports.cmake
+
+to use you use --func to set the name to translate_gettext and -p sets the build directory of compile_commands.json

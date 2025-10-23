@@ -1,0 +1,20 @@
+/.vscode/*
+
+#keep launch.json, it should work for windows and linux
+!/.vscode
+!/.vscode/launch.json
+
+# clangd indexing
+/.cache
+
+/.vs
+/.PVS-Studio
+/.idea
+
+/llvm
+
+#user specific presets (this sucks but it's the only way to add in custom cache variables outside git)
+CMakeUserPresets.json
+
+#vscode settings.json doesn't support subsitution, which means I must copy the compile_commands.json into the source.
+compile_commands.json
