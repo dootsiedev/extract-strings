@@ -28,7 +28,6 @@
 
 inline const char* remove_file_path(const char* file)
 {
-	// I think there is a std::string function with multi delimiter.
 	const char* temp_filename = strrchr(file, '\\');
 	if(temp_filename != NULL)
 	{
