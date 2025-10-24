@@ -4,6 +4,8 @@ const char* _T(const char* c) { return c; }
 
 int main()
 {
+	// TRANSLATORS: double line comment!
+	// this line will not be included.
 	printf(_T("test!\n")); // T RANSLATORS: this will not work after the translation.
 
 	printf(/* abc

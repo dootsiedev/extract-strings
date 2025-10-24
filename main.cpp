@@ -115,11 +115,14 @@ public:
 				clang::CharSourceRange::getCharRange(Comment),
 				PP.getSourceManager(),
 				PP.getLangOpts());
-			size_t pos = commentText.find("TRANSLATORS:");
+			llvm::StringRef find_text = "TRANSLATORS:";
+			size_t pos = commentText.find(find_text);
 
 			if(pos != llvm::StringRef::npos)
 			{
 				// llvm::outs() << "Found Comment:" << commentText << "\n";
+				// This works, but I don't like how the error messages look without TRANSLATORS:
+				// commentText.substr(pos + find_text.size()).ltrim(' ')
 				comments.emplace_back(commentText.substr(pos), Comment);
 			}
 		}
@@ -190,8 +193,37 @@ private:
 		}
 		// llvm::outs() << "Found string: \"" << string << "\"\n";
 
-		// Get the comment for the function.
+		//
 		clang::SourceLocation loc = Arg->getExprLoc();
+
+		// print the INFO() section.
+		if(!Disable_SrcLoc)
+		{
+			if(loc.isInvalid())
+			{
+				llvm::errs() << "<invalid loc>\n";
+				return false;
+			}
+			// Get the presumed location, which accounts for #line directives.
+			clang::PresumedLoc presumed_loc = SM.getPresumedLoc(loc);
+
+			// Check for an invalid presumed location.
+			if(presumed_loc.isInvalid())
+			{
+				llvm::errs() << "<invalid presumed loc>\n";
+				return false;
+			}
+			const char* trimmed_filename =
+				(UseFullPath) ? presumed_loc.getFilename()
+							  : remove_file_path(presumed_loc.getFilename());
+
+			// TODO: how hard would it be to also include the function type signature?
+			llvm::outs() << "INFO(\"" << get_caller_function(Context, Arg) << "\", \""
+						 << trimmed_filename << "\", " << presumed_loc.getLine() << ", "
+						 << presumed_loc.getColumn() << ")\n";
+		}
+
+
 		// Get the comment for the function.
 		for(auto rit = comments.rbegin(); rit != comments.rend(); ++rit)
 		{
@@ -243,31 +275,7 @@ private:
 				}
 				rit->used = true;
 
-				if(!Disable_SrcLoc)
-				{
-					if(loc.isInvalid())
-					{
-						llvm::errs() << "<invalid loc>\n";
-						return false;
-					}
-					// Get the presumed location, which accounts for #line directives.
-					clang::PresumedLoc presumed_loc = SM.getPresumedLoc(loc);
 
-					// Check for an invalid presumed location.
-					if(presumed_loc.isInvalid())
-					{
-						llvm::errs() << "<invalid presumed loc>\n";
-						return false;
-					}
-					const char* trimmed_filename =
-						(UseFullPath) ? presumed_loc.getFilename()
-									  : remove_file_path(presumed_loc.getFilename());
-
-					// TODO: how hard would it be to also include the function type signature?
-					llvm::outs() << "SRC_LOC(\"" << get_caller_function(Context, Arg) << "\", \""
-								 << trimmed_filename << "\", " << presumed_loc.getLine() << ", "
-								 << presumed_loc.getColumn() << ")\n";
-				}
 
 				std::string escaped_comment_buf;
 				llvm::StringRef escaped_comment = rit->text;
