@@ -6,7 +6,7 @@ endif()
 
 project(extract-strings CXX)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 17)
   
 
 # Find CMake file for Clang
@@ -32,13 +32,16 @@ target_link_libraries(extract-strings
   PRIVATE
   clangParse
   clangAST
-  clangSema
   clangDriver
   clangFrontend
-  clangFrontendTool
-  clangLex
   clangBasic
-  clangSerialization
   clangTooling
   )
-  
+
+# testing
+include(FetchContent)
+FetchContent_Declare(test SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/test CMAKE_ARGS -DCMAKE_EXPORT_COMPILE_COMMANDS=ON)
+FetchContent_MakeAvailable(test)
+
+enable_testing() # Enable CTest
+add_test(NAME MyTest COMMAND extract-strings -p ${CMAKE_CURRENT_BINARY_DIR}/test-build --func _T ${CMAKE_CURRENT_LIST_DIR}/test/test1.cpp)
