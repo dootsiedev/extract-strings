@@ -26,6 +26,24 @@
 #include <string_view>
 #include <cstring>
 
+inline const char* remove_file_path(const char* file)
+{
+	// I think there is a std::string function with multi delimiter.
+	const char* temp_filename = strrchr(file, '\\');
+	if(temp_filename != NULL)
+	{
+		// could be avoided
+		file = temp_filename + 1;
+	}
+	temp_filename = strrchr(file, '/');
+	if(temp_filename != NULL)
+	{
+		// could be avoided
+		file = temp_filename + 1;
+	}
+	return file;
+}
+
 // checks if any characters are escape codes.
 // so you can skip the allocation.
 inline bool escape_string_check_contains(std::string_view input_string)

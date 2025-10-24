@@ -14,7 +14,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 
-#include "escape_string.h"
+#include "string_tools.h"
 
 static llvm::cl::OptionCategory MyToolCategory("tl-extract");
 
@@ -33,15 +33,12 @@ static llvm::cl::opt<bool> Disable_SrcLoc(
 	llvm::cl::cat(MyToolCategory),
 	llvm::cl::init(false));
 
-/*
- // I will just use llvm::outs instead because I don't understand why llvm::errs wont be synced.
- // As in, errs get printed either before or after outs (maybe this is the clion IDE's fault...)
-static llvm::cl::opt<std::string> OutputOption(
-	"o",
-	llvm::cl::desc("the output file, prints to stdout if not specified"),
+static llvm::cl::opt<bool> UseFullPath(
+	"full-path",
+	llvm::cl::desc("include the full path to the file in the SRC_LOC"),
 	llvm::cl::Optional,
-	llvm::cl::cat(MyToolCategory));
-*/
+	llvm::cl::cat(MyToolCategory),
+	llvm::cl::init(false));
 
 using namespace clang;
 using namespace clang::tooling;
@@ -69,14 +66,14 @@ void printPresumedLoc(clang::SourceManager& SM, clang::SourceLocation loc)
 				 << presumed_loc.getColumn() << "\n";
 }
 
-//https://stackoverflow.com/questions/72571073/how-to-get-the-parent-funtion-name-in-clang-tidy-astmatch-at-callexpr-position
-#include "clang/AST/ParentMapContext.h"          // clang::DynTypedNodeList
+// https://stackoverflow.com/questions/72571073/how-to-get-the-parent-funtion-name-in-clang-tidy-astmatch-at-callexpr-position
+#include "clang/AST/ParentMapContext.h" // clang::DynTypedNodeList
 std::string get_caller_function(clang::ASTContext& Context, Expr* expr)
 {
 	// Get its parent nodes.  The docs do not realy explain why there can
 	// be multiple parents, but I think it has to do with C++ templates.
 	clang::DynTypedNodeList NodeList = Context.getParents(*expr);
-	while (!NodeList.empty())
+	while(!NodeList.empty())
 	{
 		// Get the first parent.
 		clang::DynTypedNode ParentNode = NodeList[0];
@@ -87,8 +84,8 @@ std::string get_caller_function(clang::ASTContext& Context, Expr* expr)
 		// Is the parent a FunctionDecl?
 		if(const FunctionDecl* Parent = ParentNode.get<FunctionDecl>())
 		{
-			//llvm::outs() << "Found ancestor FunctionDecl: " << (void const*)Parent << '\n';
-			//llvm::outs() << "FunctionDecl name: " << Parent->getNameAsString() << '\n';
+			// llvm::outs() << "Found ancestor FunctionDecl: " << (void const*)Parent << '\n';
+			// llvm::outs() << "FunctionDecl name: " << Parent->getNameAsString() << '\n';
 			return Parent->getNameAsString();
 		}
 
@@ -98,11 +95,9 @@ std::string get_caller_function(clang::ASTContext& Context, Expr* expr)
 	return std::string();
 }
 
-
 class PrintfStringASTVisitor : public RecursiveASTVisitor<PrintfStringASTVisitor>, CommentHandler
 {
 public:
-
 	explicit PrintfStringASTVisitor(CompilerInstance& CI)
 	: Context(CI.getASTContext())
 	, PP(CI.getPreprocessor())
@@ -121,10 +116,11 @@ public:
 				PP.getSourceManager(),
 				PP.getLangOpts());
 			size_t pos = commentText.find("TRANSLATORS:");
+
 			if(pos != llvm::StringRef::npos)
 			{
-				//llvm::outs() << "Found Comment:" << commentText << "\n";
-				comments.emplace_back(commentText, Comment);
+				// llvm::outs() << "Found Comment:" << commentText << "\n";
+				comments.emplace_back(commentText.substr(pos), Comment);
 			}
 		}
 		return false;
@@ -157,7 +153,7 @@ public:
 			if(!comment.used)
 			{
 				// TODO: this could be a warning... since this is potentially in a macro...
-				llvm::errs() << "error: failed to match comment: "<< comment.text << "\n";
+				llvm::errs() << "error: failed to match comment: " << comment.text << "\n";
 				printPresumedLoc(SM, comment.range.getBegin());
 				success = false;
 			}
@@ -192,7 +188,7 @@ private:
 			escape_string(str, string);
 			string = str;
 		}
-		//llvm::outs() << "Found string: \"" << string << "\"\n";
+		// llvm::outs() << "Found string: \"" << string << "\"\n";
 
 		// Get the comment for the function.
 		clang::SourceLocation loc = Arg->getExprLoc();
@@ -205,14 +201,14 @@ private:
 				{
 					break;
 				}
-				if(rit+1 != comments.rend())
+				if(rit + 1 != comments.rend())
 				{
-					if(!(rit+1)->used)
+					if(!(rit + 1)->used)
 					{
 						// TODO: this could be a warning... since this is potentially in a macro...
-						llvm::errs() << "error: comment not consumed!: "<< (rit+1)->text << "\n";
-						printPresumedLoc(SM, (rit+1)->range.getBegin());
-						llvm::errs() << "before here: "<< rit->text << "\n";
+						llvm::errs() << "error: comment not consumed!: " << (rit + 1)->text << "\n";
+						printPresumedLoc(SM, (rit + 1)->range.getBegin());
+						llvm::errs() << "before here: " << rit->text << "\n";
 						printPresumedLoc(SM, rit->range.getBegin());
 						return false;
 					}
@@ -222,11 +218,11 @@ private:
 				// there has to be a better way...
 				// I could use presumed loc but I already wrote this.
 				llvm::StringRef gapText = clang::Lexer::getSourceText(
-					clang::CharSourceRange::getCharRange(rit->range.getBegin(), loc),
+					clang::CharSourceRange::getCharRange(rit->range.getEnd(), loc),
 					PP.getSourceManager(),
 					PP.getLangOpts());
 				int i = 0;
-				for(char c: gapText)
+				for(char c : gapText)
 				{
 					if(c == '\n')
 					{
@@ -234,10 +230,12 @@ private:
 						// this is a hardcoded 2 line distance.
 						if(i >= 3)
 						{
-							// TODO: this could be a warning... since this is potentially in a macro...
-							llvm::errs() << "error: gap between comment and translation too large: "<< rit->text << "\n";
+							// TODO: this could be a warning... since this is potentially in a
+							// macro...
+							llvm::errs() << "error: gap between comment and translation too large: "
+										 << rit->text << "\n";
 							printPresumedLoc(SM, rit->range.getBegin());
-							llvm::errs() << "to here: "<< string << "\n";
+							llvm::errs() << "to here: " << string << "\n";
 							printPresumedLoc(SM, loc);
 							return false;
 						}
@@ -261,12 +259,14 @@ private:
 						llvm::errs() << "<invalid presumed loc>\n";
 						return false;
 					}
-					// TODO: strip the whole path from the file,
-					//  but I really like how clion will find the path using the line+column...
+					const char* trimmed_filename =
+						(UseFullPath) ? presumed_loc.getFilename()
+									  : remove_file_path(presumed_loc.getFilename());
+
+					// TODO: how hard would it be to also include the function type signature?
 					llvm::outs() << "SRC_LOC(\"" << get_caller_function(Context, Arg) << "\", \""
-								 << presumed_loc.getFilename() << ":" << presumed_loc.getLine()
-								 << ":" << presumed_loc.getColumn() << "\", "
-								 << presumed_loc.getLine() << ")\n";
+								 << trimmed_filename << "\", " << presumed_loc.getLine() << ", "
+								 << presumed_loc.getColumn() << ")\n";
 				}
 
 				std::string escaped_comment_buf;
@@ -295,8 +295,10 @@ public:
 
 	void HandleTranslationUnit(ASTContext& Context) override
 	{
-		// I want all the files to be merged.
-		//llvm::outs() << "TL_START()\n\n";
+		// all the files will have their own TL_START if I did this...
+		// and I don't know how to properly close it out
+		// (but that's fine, I still need to process this to error check + merge duplicates).
+		// llvm::outs() << "TL_START()\n\n";
 		if(!Visitor.TraverseDecl(Context.getTranslationUnitDecl()))
 		{
 			// I want the test to fail.
@@ -306,7 +308,6 @@ public:
 		{
 			exit(1);
 		}
-		//llvm::outs() << "TL_END()\n";
 	}
 
 private:
@@ -326,7 +327,7 @@ int main(int argc, const char** argv)
 {
 	// wait... why do the comments work without this...?
 	// I probably should also disable warnings, but I think it's harmless ATM (performance?).
-	//args.push_back("--extra-arg=-fparse-all-comments");
+	// args.push_back("--extra-arg=-fparse-all-comments");
 
 	auto ExpectedParser = CommonOptionsParser::create(argc, argv, MyToolCategory);
 	if(!ExpectedParser)
@@ -337,7 +338,8 @@ int main(int argc, const char** argv)
 
 	if(!ExtractFuncOption.empty())
 	{
-		//llvm::outs() << "--func value: " << ExtractFuncOption << "\n";
+		// I use llvm::outs for the output.
+		// llvm::outs() << "--func value: " << ExtractFuncOption << "\n";
 	}
 
 	CommonOptionsParser& OptionsParser = ExpectedParser.get();
