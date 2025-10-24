@@ -4,7 +4,7 @@ const char* _T(const char* c) { return c; }
 
 int main()
 {
-	printf(_T("test!\n")); // T RANSLATORS: work if you removed the space.
+	printf(_T("test!\n")); // T RANSLATORS: this will not work after the translation.
 
 	printf(/* abc
  * TRANSLATORS: a comment!*/ _T("test %s!\n"), "foo");
